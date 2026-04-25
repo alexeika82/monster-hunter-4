@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>👹 MONSTER HUNTER — Telegram Mini App</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.1.4/dist/leaflet-rotate.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #e8f0f0;
+            height: 100vh;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+        }
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+            position: relative;
+        }
+        .top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(0,0,0,0.75));
+            backdrop-filter: blur(12px);
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid rgba(46,204,113,0.3);
+            pointer-events: auto;
+        }
+        .logo {
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 12px;
+            border-radius: 25px;
+        }
+        .stats {
+            display: flex;
+            gap: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 16px;
+            border-radius: 25px;
+        }
+        .stat {
+            color: white;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #f1c40f;
+            font-size: 16px;
+        }
+        .top-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .icon-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .my-location-btn {
+            background: #22c55e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 6px 12px;
+        }
+        .rotate-lock-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .rotate-lock-btn.active {
+            background: #e94560;
+            color: white;
+        }
+        .distance-badge {
+            font-size: 9px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 12px;
+            padding: 2px 6px;
+            margin-top: 2px;
+            color: #f1c40f;
+        }
+        .my-location-btn:active { background: #16a34a; transform: scale(0.97); }
+        .wake-lock-indicator {
+            position: absolute;
+            top: 70px;
+            left: 16px;
+            z-index: 400;
+            background: rgba(0,0,0,0.6);
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 10px;
+            color: #2ecc71;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .map-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+        }
+        #map { width: 100%; height: 100%; }
+        
+        .radar-container {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            z-index: 500;
+            width: 100px;
+            height: 100px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 50%;
+            border: 2px solid #2ecc71;
+            box-shadow: 0 0 15px rgba(46,204,113,0.5);
+            backdrop-filter: blur(5px);
+            overflow: hidden;
+        }
+        .radar-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .radar-sweep {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: conic-gradient(from 0deg, transparent, rgba(46,204,113,0.3), transparent);
+            border-radius: 50%;
+            animation: sweep 3s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes sweep {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .radar-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        
+        .vibro-bar-container {
+            position: absolute;
+            bottom: 130px;
+            right: 16px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 20px;
+            padding: 6px 10px;
+            z-index: 400;
+            cursor: pointer;
+        }
+        .vibro-bar {
+            width: 60px;
+            height: 6px;
+            background: #2c3e50;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .vibro-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: #e94560;
+            transition: width 0.1s;
+        }
+        .vibro-status {
+            font-size: 8px;
+            color: #95a5a6;
+            text-align: center;
+            margin-top: 2px;
+        }
+        
+        .compass-container {
+            position: absolute;
+            bottom: 130px;
+            left: 16px;
+            z-index: 400;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            padding: 6px 12px;
+            border: 1px solid #2ecc71;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        .compass-arrow { font-size: 20px; transition: transform 0.1s linear; }
+        .compass-info { display: flex; flex-direction: column; align-items: flex-end; }
+        .compass-distance { font-size: 11px; color: #f1c40f; font-weight: bold; }
+        .compass-monster { font-size: 8px; color: white; }
+        
+        .nearby-info {
+            position: absolute;
+            top: 70px;
+            right: 16px;
+            z-index: 400;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 6px 12px;
+            border-left: 3px solid #e94560;
+            pointer-events: none;
+            min-width: 110px;
+        }
+        .nearby-title { font-size: 8px; color: #95a5a6; }
+        .nearby-name { color: #f1c40f; font-weight: bold; font-size: 12px; }
+        .nearby-dist { color: #2ecc71; font-size: 10px; }
+        
+        .catch-panel {
+            position: absolute;
+            bottom: 80px;
+            left: 16px;
+            right: 16px;
+            z-index: 400;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 24px;
+            padding: 10px 14px;
+            border: 2px solid #e94560;
+            backdrop-filter: blur(10px);
+            display: none;
+            pointer-events: auto;
+        }
+        .catch-panel.active { display: block; animation: pulse 0.3s ease; }
+        @keyframes pulse {
+            0% { transform: scale(0.98); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .catch-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .catch-title { color: #e94560; font-size: 12px; font-weight: bold; }
+        .catch-monster-name { color: #f1c40f; font-size: 16px; font-weight: bold; }
+        .catch-distance { color: #95a5a6; font-size: 10px; margin-bottom: 6px; }
+        .catch-progress { background: #2c3e50; border-radius: 25px; height: 8px; margin: 8px 0; overflow: hidden; }
+        .catch-progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #f39c12, #e94560); transition: width 0.05s linear; }
+        .catch-button {
+            width: 100%; background: #e94560; border: none; padding: 12px; border-radius: 30px;
+            color: white; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 6px;
+        }
+        .catch-button:active { transform: scale(0.97); }
+        .catch-button.charging { background: #f39c12; }
+        .hold-counter { text-align: center; font-size: 20px; font-weight: bold; color: #f1c40f; margin: 4px 0; }
+        
+        .sidebar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 85%;
+            max-width: 380px;
+            background: rgba(0,0,0,0.95);
+            backdrop-filter: blur(15px);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            border-radius: 0 24px 24px 0;
+            overflow: hidden;
+            pointer-events: auto;
+        }
+        .sidebar.open { transform: translateX(0); }
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            background: #1e2a2a;
+            border-bottom: 2px solid #2ecc71;
+        }
+        .sidebar-header span { color: white; font-size: 16px; font-weight: bold; }
+        .close-sidebar { background: none; border: none; color: white; font-size: 24px; cursor: pointer; }
+        .sidebar-tabs {
+            display: flex;
+            background: #0a1a15;
+            flex-shrink: 0;
+        }
+        .sidebar-tab {
+            flex: 1;
+            padding: 14px 8px;
+            text-align: center;
+            cursor: pointer;
+            color: #95a5a6;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .sidebar-tab.active {
+            color: #f1c40f;
+            border-bottom: 3px solid #f1c40f;
+            background: rgba(241,196,15,0.1);
+        }
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        
+        .bestiary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .bestiary-card {
+            background: #071f1a;
+            border-radius: 16px;
+            padding: 12px;
+            text-align: center;
+            opacity: 0.4;
+        }
+        .bestiary-card.caught {
+            opacity: 1;
+            border: 2px solid #f1c40f;
+            background: linear-gradient(135deg, #0a2a22, #071f1a);
+        }
+        .bestiary-emoji { font-size: 40px; }
+        .bestiary-name { font-size: 12px; color: white; font-weight: bold; margin-top: 5px; }
+        .bestiary-rarity { font-size: 9px; color: #f1c40f; margin-top: 3px; }
+        
+        .achievement-item, .daily-task {
+            background: #071f1a;
+            border-radius: 16px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .achievement-icon { font-size: 28px; }
+        .achievement-info { flex: 1; margin-left: 12px; }
+        .achievement-title, .daily-task-name { font-size: 13px; font-weight: bold; color: #f1c40f; }
+        .achievement-desc, .daily-task-progress { font-size: 11px; color: #95a5a6; }
+        .achievement-status { font-size: 24px; }
+        .daily-reward { color: #2ecc71; font-weight: bold; font-size: 14px; }
+        
+        .shop-item {
+            background: #071f1a;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        .shop-coins { font-size: 18px; color: #f1c40f; font-weight: bold; margin-bottom: 12px; }
+        .shop-btn {
+            background: #2ecc71;
+            border: none;
+            padding: 10px;
+            border-radius: 30px;
+            color: #010f0a;
+            font-weight: bold;
+            margin-top: 8px;
+            width: 100%;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 30px;
+            z-index: 3000;
+            animation: fadeOut 3s ease forwards;
+            font-size: 12px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; }
+        }
+        
+        @media (max-width: 480px) {
+            .stat span:not(.stat-value) { display: none; }
+            .logo span { display: none; }
+            .radar-container { width: 85px; height: 85px; bottom: 12px; right: 12px; }
+            .compass-container { bottom: 110px; left: 12px; }
+            .vibro-bar-container { bottom: 110px; right: 12px; }
+            .nearby-info { top: 60px; padding: 4px 10px; min-width: 95px; }
+            .nearby-name { font-size: 11px; }
+            .catch-panel { bottom: 70px; }
+            .sidebar-tab { font-size: 11px; padding: 10px 4px; }
+            .bestiary-emoji { font-size: 32px; }
+            .wake-lock-indicator { top: 65px; left: 12px; font-size: 8px; }
+            .icon-btn, .rotate-lock-btn { padding: 6px 10px; font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="top-bar">
+        <div class="logo"><i class="fas fa-skull"></i><span>HUNTER</span></div>
+        <div class="stats">
+            <div class="stat">🏆 <span class="stat-value" id="caughtCount">0</span></div>
+            <div class="stat">👹 <span class="stat-value" id="monstersLeft">0</span></div>
+            <div class="stat">⭐ <span class="stat-value" id="levelDisplay">1</span></div>
+            <div class="stat">💰 <span class="stat-value" id="coinsDisplay">100</span></div>
+        </div>
+        <div class="top-buttons">
+            <button class="icon-btn" id="menuBtn"><i class="fas fa-book"></i> КОЛЛЕКЦИЯ</button>
+            <button class="rotate-lock-btn" id="toggleRotateBtn">🔒 БЛОКИРОВКА ПОВОРОТА</button>
+            <button class="icon-btn my-location-btn" id="myLocationBtn">
+                <i class="fas fa-location-dot"></i> Я ЗДЕСЬ
+                <span class="distance-badge" id="nearestDistance">— м</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="wake-lock-indicator" id="wakeLockIndicator">
+        <i class="fas fa-sun"></i> <span>Экран активен</span>
+    </div>
+
+    <div class="map-container"><div id="map"></div></div>
+
+    <div class="radar-container">
+        <canvas id="radarCanvas" class="radar-canvas" width="100" height="100"></canvas>
+        <div class="radar-sweep"></div>
+        <div class="radar-center"></div>
+    </div>
+
+    <div class="vibro-bar-container" id="vibroToggle">
+        <div class="vibro-bar"><div class="vibro-bar-fill" id="vibroBarFill"></div></div>
+        <div class="vibro-status" id="vibroStatus">ВКЛ</div>
+    </div>
+
+    <div class="compass-container" id="compassBtn">
+        <div class="compass-arrow" id="compassArrow">⬆️</div>
+        <div class="compass-info">
+            <div class="compass-distance" id="compassDistance">— м</div>
+            <div class="compass-monster" id="compassMonster">—</div>
+        </div>
+    </div>
+
+    <div class="nearby-info">
+        <div class="nearby-title">🎯 БЛИЖАЙШАЯ ЦЕЛЬ</div>
+        <div class="nearby-name" id="nearbyName">—</div>
+        <div class="nearby-dist" id="nearbyDist">— м</div>
+    </div>
+
+    <div class="catch-panel" id="catchPanel">
+        <div class="catch-header">
+            <span class="catch-title">⚠️ В ЗОНЕ ЛОВЛИ!</span>
+            <span class="catch-monster-name" id="catchMonsterName">МОНСТР</span>
+        </div>
+        <div class="catch-distance" id="catchDistance">Расстояние: -- м</div>
+        <div class="catch-progress"><div class="catch-progress-bar" id="catchProgress"></div></div>
+        <div class="hold-counter" id="holdCounter">0.0</div>
+        <button class="catch-button" id="catchButton">👆 УДЕРЖИВАЙТЕ ДЛЯ ЛОВЛИ</button>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span><i class="fas fa-trophy"></i> ПРОФИЛЬ ОХОТНИКА</span>
+            <button class="close-sidebar" id="closeSidebar"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="sidebar-tabs">
+            <div class="sidebar-tab active" data-tab="bestiary">📖 БЕСТИАРИЙ</div>
+            <div class="sidebar-tab" data-tab="achievements">🏆 ДОСТИЖЕНИЯ</div>
+            <div class="sidebar-tab" data-tab="daily">📅 ЗАДАНИЯ</div>
+            <div class="sidebar-tab" data-tab="shop">🛒 МАГАЗИН</div>
+        </div>
+        <div class="sidebar-content">
+            <div class="tab-pane active" id="bestiaryTab"><div id="bestiaryGrid">Загрузка...</div></div>
+            <div class="tab-pane" id="achievementsTab"><div id="achievementsList">Загрузка...</div></div>
+            <div class="tab-pane" id="dailyTab"><div id="dailyTasksList">Загрузка...</div></div>
+            <div class="tab-pane" id="shopTab"><div id="shopList">Загрузка...</div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ========== TELEGRAM MINI APP ==========
+    let telegramUser = null;
+    let isTelegramWebApp = false;
+
+    if (window.Telegram && window.Telegram.WebApp) {
+        isTelegramWebApp = true;
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        telegramUser = tg.initDataUnsafe?.user;
+        if (telegramUser) {
+            console.log("Telegram user:", telegramUser.first_name);
+        }
+        if (tg.themeParams.bg_color) {
+            document.body.style.backgroundColor = tg.themeParams.bg_color;
+        }
+    }
+
+    // ========== КОНФИГУРАЦИЯ МОНСТРОВ ==========
+    const MONSTER_TYPES = [
+        { name: "ПРИЗРАК", emoji: "👻", color: "#a855f7", catchTime: 3000, rarity: "common", reward: 10 },
+        { name: "ПОЛТЕРГЕЙСТ", emoji: "💀", color: "#8b5cf6", catchTime: 3500, rarity: "common", reward: 12 },
+        { name: "ПАУК-ТВАРЬ", emoji: "🕷️", color: "#ec4899", catchTime: 3800, rarity: "common", reward: 12 },
+        { name: "ОБОРОТЕНЬ", emoji: "🐺", color: "#f97316", catchTime: 4000, rarity: "rare", reward: 25 },
+        { name: "НЕКРОМАНТ", emoji: "🧙", color: "#6366f1", catchTime: 4500, rarity: "rare", reward: 30 },
+        { name: "ДЕМОН", emoji: "👹", color: "#ef4444", catchTime: 5000, rarity: "epic", reward: 50 },
+        { name: "ДРАКОН", emoji: "🐉", color: "#f59e0b", catchTime: 6000, rarity: "legendary", reward: 100 }
+    ];
+
+    // МЕГА-БОСС
+    const MEGA_BOSS = {
+        name: "МЕГА-БОСС", emoji: "👾", color: "#ff00ff", catchTime: 15000, rarity: "mythic", reward: 300,
+        isMegaBoss: true
+    };
+
+    // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+    let map, userMarker = null, userPosition = null;
+    let monsters = [], monsterMarkers = [];
+    let chests = [], chestMarkers = [];
+    let caughtCount = 0, totalCaught = 0;
+    let level = 1, exp = 0, coins = 100;
+    let comboCounter = 0, lastCatchTime = 0;
+    let totalDistance = 0, lastLatLng = null;
+    let bestiary = {}, achievements = {};
+    let currentHeading = 0;
+    let movementDirection = null; // Направление движения из GPS (в градусах)
+    let positionHistory = []; // История позиций для определения направления движения
+    let selectedMonsterRoute = null;
+    let currentRouteLine = null;
+    let vibrationEnabled = true;
+    let rotationLocked = false;
+    let lastVibrationTime = 0;
+    let isCharging = false, chargeStartTime = 0, currentCatchMonster = null, currentCatchDistance = 0, catchInterval = null;
+    let shouldCenterOnMe = true;
+    
+    // Механики
+    let lastHourlySpawn = null;
+    let megaBossDefeated = false;
+    
+    // Геолокация
+    let geoWatchId = null;
+    let lastGeoPosition = null;
+    let isGeoActive = false;
+    let geoPermissionDenied = false;
+    let hasRequestedGeo = false;
+    
+    // Wake Lock
+    let wakeLock = null;
+    let wakeLockIndicator = document.getElementById('wakeLockIndicator');
+    
+    // DOM элементы
+    const caughtCountSpan = document.getElementById('caughtCount');
+    const monstersLeftSpan = document.getElementById('monstersLeft');
+    const levelDisplaySpan = document.getElementById('levelDisplay');
+    const coinsDisplaySpan = document.getElementById('coinsDisplay');
+    const nearbyNameSpan = document.getElementById('nearbyName');
+    const nearbyDistSpan = document.getElementById('nearbyDist');
+    const nearestDistanceSpan = document.getElementById('nearestDistance');
+    const catchPanelDiv = document.getElementById('catchPanel');
+    const catchMonsterNameSpan = document.getElementById('catchMonsterName');
+    const catchDistanceSpan = document.getElementById('catchDistance');
+    const catchProgressBar = document.getElementById('catchProgress');
+    const holdCounterSpan = document.getElementById('holdCounter');
+    const catchButton = document.getElementById('catchButton');
+    const compassArrow = document.getElementById('compassArrow');
+    const compassDistanceSpan = document.getElementById('compassDistance');
+    const compassMonsterSpan = document.getElementById('compassMonster');
+    const vibroBarFill = document.getElementById('vibroBarFill');
+    const vibroStatus = document.getElementById('vibroStatus');
+    const radarCanvas = document.getElementById('radarCanvas');
+    let ctx = radarCanvas ? radarCanvas.getContext('2d') : null;
+
+    // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+    function showNotification(msg, isError = false) {
+        const n = document.createElement('div');
+        n.className = 'notification';
+        n.style.background = isError ? '#e94560' : '#1e293b';
+        n.innerHTML = msg;
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 3000);
+    }
+    
+    function doVibration(duration = 80) {
+        if (vibrationEnabled && navigator.vibrate && (Date.now() - lastVibrationTime > 200)) {
+            navigator.vibrate(duration);
+            lastVibrationTime = Date.now();
+        }
+    }
+    
+    function getDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+    
+    function updateUI() {
+        caughtCountSpan.innerText = caughtCount;
+        levelDisplaySpan.innerText = level;
+        coinsDisplaySpan.innerText = coins;
+        monstersLeftSpan.innerText = monsters.filter(m => !m.isCaught).length;
+    }
+    
+    function addCoins(amount) { 
+        coins += amount; 
+        updateUI(); 
+        saveGameData(); 
+        renderShop(); 
+    }
+    
+    function addExp(amount) {
+        exp += amount;
+        while (exp >= level * 100) {
+            exp -= level * 100;
+            level++;
+            addCoins(50);
+            showNotification(`🎉 УРОВЕНЬ ${level}! +50 монет!`);
+        }
+        updateUI();
+        saveGameData();
+    }
+    // ========== ГЕОЛОКАЦИЯ ==========
+    function saveLastPosition(lat, lng) {
+        localStorage.setItem('lastSavedLat', lat);
+        localStorage.setItem('lastSavedLng', lng);
+        localStorage.setItem('lastSavedTime', Date.now());
+    }
+
+    function loadLastPosition() {
+        const lat = localStorage.getItem('lastSavedLat');
+        const lng = localStorage.getItem('lastSavedLng');
+        const savedTime = localStorage.getItem('lastSavedTime');
+        if (lat && lng && savedTime && (Date.now() - parseInt(savedTime) < 3600000)) {
+            return { lat: parseFloat(lat), lng: parseFloat(lng) };
+        }
+        return null;
+    }
+
+    function stopGeoWatch() {
+        if (geoWatchId !== null) {
+            navigator.geolocation.clearWatch(geoWatchId);
+            geoWatchId = null;
+        }
+        isGeoActive = false;
+    }
+
+    function startGeoWatch() {
+        if (!navigator.geolocation || geoPermissionDenied) return;
+        stopGeoWatch();
+        geoWatchId = navigator.geolocation.watchPosition(
+            function(position) {
+                lastGeoPosition = position;
+                isGeoActive = true;
+                saveLastPosition(position.coords.latitude, position.coords.longitude);
+                updateUserPosition(position.coords.latitude, position.coords.longitude);
+            },
+            function(error) {
+                if (error.code === 1) geoPermissionDenied = true;
+            },
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        );
+    }
+
+    function requestGeolocationOnce() {
+        if (!navigator.geolocation) {
+            showNotification('❌ Геолокация не поддерживается', true);
+            return;
+        }
+        hasRequestedGeo = true;
+        showNotification('📍 Запрос геолокации...', false);
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                lastGeoPosition = position;
+                isGeoActive = true;
+                geoPermissionDenied = false;
+                saveLastPosition(position.coords.latitude, position.coords.longitude);
+                updateUserPosition(position.coords.latitude, position.coords.longitude);
+                startGeoWatch();
+                showNotification('✅ Геолокация активирована!', false);
+            },
+            function(error) {
+                if (error.code === 1) {
+                    geoPermissionDenied = true;
+                    showNotification('❌ Нужен доступ к геолокации для игры!', true);
+                } else {
+                    const savedPos = loadLastPosition();
+                    if (savedPos) updateUserPosition(savedPos.lat, savedPos.lng);
+                }
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    }
+
+    function forceRefreshLocation() {
+        if (geoPermissionDenied) {
+            geoPermissionDenied = false;
+            requestGeolocationOnce();
+        } else {
+            showNotification('🔄 Обновление позиции...', false);
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    saveLastPosition(position.coords.latitude, position.coords.longitude);
+                    updateUserPosition(position.coords.latitude, position.coords.longitude);
+                    showNotification('✅ Позиция обновлена!', false);
+                },
+                function(error) {
+                    const savedPos = loadLastPosition();
+                    if (savedPos) updateUserPosition(savedPos.lat, savedPos.lng);
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
+    }
+
+    // ========== WAKE LOCK ==========
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                if (wakeLock) await wakeLock.release();
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLockIndicator.innerHTML = '<i class="fas fa-sun"></i> <span>Экран активен</span>';
+                wakeLockIndicator.style.color = '#2ecc71';
+            } catch (err) {
+                wakeLockIndicator.innerHTML = '<i class="fas fa-moon"></i> <span>Экран может гаснуть</span>';
+                wakeLockIndicator.style.color = '#f39c12';
+            }
+        }
+    }
+    requestWakeLock();
+    document.addEventListener('touchstart', () => { if (wakeLock === null) requestWakeLock(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && wakeLock === null) requestWakeLock(); });
+
+    // ========== ГЕНЕРАЦИЯ СУНДУКОВ ==========
+    function spawnChestsAroundUser(lat, lng, count = 3) {
+        const newChests = [];
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 100 + Math.random() * 600;
+            const deltaLat = (radius * Math.cos(angle)) / 111300;
+            const deltaLng = (radius * Math.sin(angle)) / (111300 * Math.cos(lat * Math.PI / 180));
+            newChests.push({
+                id: "chest_" + Date.now() + "_" + i + "_" + Math.random(),
+                lat: lat + deltaLat,
+                lng: lng + deltaLng,
+                coins: 30 + Math.floor(Math.random() * 70)
+            });
+        }
+        chests = newChests;
+        updateChestsMap();
+        saveGameData();
+    }
+    
+    function updateChestsMap() {
+        chestMarkers.forEach(m => map.removeLayer(m));
+        chestMarkers = [];
+        chests.forEach(chest => {
+            const chestIcon = L.divIcon({
+                html: `<div style="background:#f39c12;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid #ffd700;box-shadow:0 0 10px gold;cursor:pointer;">💰</div>`,
+                iconSize: [32, 32], iconAnchor: [16, 16]
+            });
+            const marker = L.marker([chest.lat, chest.lng], { icon: chestIcon }).addTo(map);
+            marker.bindPopup(`💰 СУНДУК: ${chest.coins} монет<br><button onclick="window.openChestById('${chest.id}')" style="background:#f39c12;border:none;padding:6px 12px;border-radius:15px;cursor:pointer;">📦 ОТКРЫТЬ</button>`);
+            marker.on('click', () => tryOpenChest(chest));
+            chestMarkers.push(marker);
+        });
+    }
+    
+    window.openChestById = function(id) {
+        const chest = chests.find(c => c.id === id);
+        if (chest) tryOpenChest(chest);
+    };
+    
+    function tryOpenChest(chest) {
+        if (!userPosition) {
+            showNotification('Сначала определите позицию', true);
+            return;
+        }
+        const dist = getDistance(userPosition.lat, userPosition.lng, chest.lat, chest.lng);
+        if (dist <= 20) {
+            addCoins(chest.coins);
+            showNotification(`💰 СУНДУК ОТКРЫТ! +${chest.coins} монет!`);
+            chests = chests.filter(c => c.id !== chest.id);
+            updateChestsMap();
+            saveGameData();
+            doVibration(100);
+        } else {
+            showNotification(`Подойдите ближе к сундуку! (${Math.round(dist)} м)`, true);
+        }
+    }
+
+    // ========== ЕЖЕДНЕВНОЕ ОБНОВЛЕНИЕ (00:00) ==========
+    function performDailyResetIfNeeded() {
+        const now = new Date();
+        const todayStr = now.toDateString();
+        let lastResetDate = localStorage.getItem('monster_last_reset_date');
+        
+        if (lastResetDate !== todayStr) {
+            console.log("ЕЖЕДНЕВНЫЙ РЕСЕТ: старые монстры и сундуки удаляются");
+            monsters = [];
+            chests = [];
+            megaBossDefeated = false;
+            localStorage.setItem('monster_last_reset_date', todayStr);
+            
+            if (userPosition && userPosition.lat) {
+                spawnFreshMonstersAroundUser(userPosition.lat, userPosition.lng);
+                spawnChestsAroundUser(userPosition.lat, userPosition.lng, 4);
+                showNotification("🌙 НОЧНОЕ ОБНОВЛЕНИЕ! Новые монстры и сундуки появились!", false);
+                doVibration(200);
+            }
+            
+            if (currentRouteLine) {
+                map.removeLayer(currentRouteLine);
+                currentRouteLine = null;
+                selectedMonsterRoute = null;
+            }
+            updateMonstersMap();
+            updateChestsMap();
+            updateUI();
+            saveGameData();
+        }
+    }
+    
+    // ========== ЕЖЕЧАСНЫЙ СПАВН ==========
+    function checkHourlySpawn() {
+        const now = Date.now();
+        if (!lastHourlySpawn) lastHourlySpawn = now;
+        if (now - lastHourlySpawn >= 3600000 && userPosition) {
+            lastHourlySpawn = now;
+            const type = MONSTER_TYPES[Math.floor(Math.random() * MONSTER_TYPES.length)];
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 100 + Math.random() * 500;
+            const deltaLat = (radius * Math.cos(angle)) / 111300;
+            const deltaLng = (radius * Math.sin(angle)) / (111300 * Math.cos(userPosition.lat * Math.PI / 180));
+            monsters.push({
+                id: Date.now() + Math.random() * 10000,
+                lat: userPosition.lat + deltaLat,
+                lng: userPosition.lng + deltaLng,
+                type: type,
+                name: type.name,
+                emoji: type.emoji,
+                color: type.color,
+                catchTime: type.catchTime,
+                rarity: type.rarity,
+                reward: type.reward,
+                isCaught: false,
+                isMegaBoss: false
+            });
+            updateMonstersMap();
+            saveGameData();
+            showNotification(`⏰ ЕЖЕЧАСНОЕ СОБЫТИЕ! Появился новый ${type.emoji} ${type.name}!`);
+            doVibration(100);
+        }
+    }
+    
+    // ========== ПОЯВЛЕНИЕ МЕГА-БОССА ==========
+    function checkMegaBossSpawn() {
+        if (megaBossDefeated) return;
+        const aliveMonsters = monsters.filter(m => !m.isCaught && !m.isMegaBoss);
+        if (aliveMonsters.length === 0 && monsters.length > 0 && userPosition) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 150;
+            const deltaLat = (radius * Math.cos(angle)) / 111300;
+            const deltaLng = (radius * Math.sin(angle)) / (111300 * Math.cos(userPosition.lat * Math.PI / 180));
+            monsters.push({
+                id: "megaboss_" + Date.now(),
+                lat: userPosition.lat + deltaLat,
+                lng: userPosition.lng + deltaLng,
+                name: MEGA_BOSS.name,
+                emoji: MEGA_BOSS.emoji,
+                color: MEGA_BOSS.color,
+                catchTime: MEGA_BOSS.catchTime,
+                rarity: MEGA_BOSS.rarity,
+                reward: MEGA_BOSS.reward,
+                isCaught: false,
+                isMegaBoss: true
+            });
+            updateMonstersMap();
+            saveGameData();
+            showNotification(`🔥🔥🔥 МЕГА-БОСС ${MEGA_BOSS.emoji} появился на карте! Победите его для огромной награды! 🔥🔥🔥`);
+            doVibration(500);
+        }
+    }
+    
+    // Генерация новых монстров
+    function spawnFreshMonstersAroundUser(lat, lng) {
+        const count = 6 + Math.floor(Math.random() * 6);
+        const newMonsters = [];
+        for (let i = 0; i < count; i++) {
+            const type = MONSTER_TYPES[Math.floor(Math.random() * MONSTER_TYPES.length)];
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 80 + Math.random() * 720;
+            const deltaLat = (radius * Math.cos(angle)) / 111300;
+            const deltaLng = (radius * Math.sin(angle)) / (111300 * Math.cos(lat * Math.PI / 180));
+            newMonsters.push({
+                id: Date.now() + i + Math.random() * 10000,
+                lat: lat + deltaLat,
+                lng: lng + deltaLng,
+                type: type,
+                name: type.name,
+                emoji: type.emoji,
+                color: type.color,
+                catchTime: type.catchTime,
+                rarity: type.rarity,
+                reward: type.reward,
+                isCaught: false,
+                isMegaBoss: false
+            });
+        }
+        monsters = newMonsters;
+        megaBossDefeated = false;
+        saveGameData();
+        updateMonstersMap();
+        updateUI();
+    }
+    
+    // ========== СОХРАНЕНИЕ И ЗАГРУЗКА ==========
+    function saveGameData() {
+        const saveObj = {
+            caughtCount, totalCaught, level, exp, coins, bestiary, achievements, totalDistance,
+            monsters: monsters.map(m => ({ ...m })),
+            chests: chests,
+            megaBossDefeated: megaBossDefeated,
+            lastHourlySpawn: lastHourlySpawn,
+            lastResetDate: localStorage.getItem('monster_last_reset_date')
+        };
+        localStorage.setItem('monsterHunterFinal', JSON.stringify(saveObj));
+    }
+    
+    function loadGameData() {
+        const saved = localStorage.getItem('monsterHunterFinal');
+        if (saved) {
+            const d = JSON.parse(saved);
+            caughtCount = d.caughtCount || 0;
+            totalCaught = d.totalCaught || 0;
+            level = d.level || 1;
+            exp = d.exp || 0;
+            coins = d.coins || 100;
+            bestiary = d.bestiary || {};
+            achievements = d.achievements || {};
+            totalDistance = d.totalDistance || 0;
+            if (d.monsters) monsters = d.monsters.map(m => ({ ...m }));
+            if (d.chests) chests = d.chests;
+            megaBossDefeated = d.megaBossDefeated || false;
+            lastHourlySpawn = d.lastHourlySpawn || null;
+            if (d.lastResetDate) localStorage.setItem('monster_last_reset_date', d.lastResetDate);
+        }
+        updateUI();
+        renderBestiary();
+        renderAchievements();
+        renderDailyTasks();
+        renderShop();
+        if (chests.length > 0) updateChestsMap();
+    }
+    
+    // ========== КАРТА И МАРКЕРЫ ==========
+    function updateMonstersMap() {
+        monsterMarkers.forEach(m => map.removeLayer(m));
+        monsterMarkers = [];
+        monsters.forEach(monster => {
+            if (monster.isCaught) return;
+            const isBoss = monster.isMegaBoss;
+            const icon = L.divIcon({
+                html: `<div style="background:${monster.color};width:${isBoss ? '48px' : '38px'};height:${isBoss ? '48px' : '38px'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${isBoss ? '28px' : '22px'};border:${isBoss ? '3px solid gold' : '2px solid white'};box-shadow:0 0 12px ${monster.color};cursor:pointer;">${monster.emoji}</div>`,
+                iconSize: [isBoss ? 48 : 38, isBoss ? 48 : 38], iconAnchor: [isBoss ? 24 : 19, isBoss ? 24 : 19]
+            });
+            const marker = L.marker([monster.lat, monster.lng], { icon }).addTo(map);
+            marker.bindPopup(`
+                <b>${monster.emoji} ${monster.name}</b><br>
+                ⭐ ${monster.rarity}<br>💰 ${monster.reward} монет<br>
+                <button onclick="window.buildRouteToMonsterById('${monster.id}')" style="background:#e94560;border:none;padding:6px 12px;border-radius:15px;color:white;cursor:pointer;margin-top:5px;">🗺️ МАРШРУТ</button>
+            `);
+            marker.on('click', () => buildRouteToMonster(monster));
+            monsterMarkers.push(marker);
+        });
+    }
+    
+    function buildRouteToMonster(monster) {
+        if (!userPosition) {
+            showNotification('❌ Сначала определите местоположение!', true);
+            return;
+        }
+        if (currentRouteLine) map.removeLayer(currentRouteLine);
+        currentRouteLine = L.polyline([
+            L.latLng(userPosition.lat, userPosition.lng),
+            L.latLng(monster.lat, monster.lng)
+        ], { color: '#e94560', weight: 5, opacity: 0.9, dashArray: '10, 8' }).addTo(map);
+        selectedMonsterRoute = monster;
+        showNotification(`🗺️ Маршрут к ${monster.emoji} ${monster.name} построен!`);
+    }
+    
+    window.buildRouteToMonsterById = function(id) {
+        const monster = monsters.find(m => m.id == id);
+        if (monster) buildRouteToMonster(monster);
+    };
+    
+    function clearRoute() {
+        if (currentRouteLine) {
+            map.removeLayer(currentRouteLine);
+            currentRouteLine = null;
+        }
+        selectedMonsterRoute = null;
+    }
+    
+    // ========== ОПРЕДЕЛЕНИЕ НАПРАВЛЕНИЯ ДВИЖЕНИЯ (как в навигаторе) ==========
+    function calculateMovementDirection(lat, lng) {
+        // Добавляем текущую позицию в историю
+        positionHistory.push({ lat, lng, time: Date.now() });
+        
+        // Оставляем только позиции за последние 5 секунд
+        const now = Date.now();
+        positionHistory = positionHistory.filter(p => now - p.time < 5000);
+        
+        // Нужно минимум 2 позиции для расчета направления
+        if (positionHistory.length < 2) return null;
+        
+        // Берем первую и последнюю позицию из истории
+        const first = positionHistory[0];
+        const last = positionHistory[positionHistory.length - 1];
+        
+        // Если перемещение очень маленькое (< 2 метра) - считаем что стоим на месте
+        const distance = getDistance(first.lat, first.lng, last.lat, last.lng);
+        if (distance < 2) return null;
+        
+        // Вычисляем угол направления движения
+        const deltaX = last.lng - first.lng;
+        const deltaY = last.lat - first.lat;
+        let angle = Math.atan2(deltaX, deltaY) * 180 / Math.PI;
+        if (angle < 0) angle += 360;
+        
+        return angle;
+    }
+    
+    // ========== ОБНОВЛЕНИЕ ПОЗИЦИИ ==========
+    function updateUserPosition(lat, lng, heading = null) {
+        if (lastLatLng) {
+            const d = getDistance(lastLatLng.lat, lastLatLng.lng, lat, lng);
+            totalDistance += d;
+        }
+        
+        // Вычисляем направление движения по GPS
+        const movementDir = calculateMovementDirection(lat, lng);
+        if (movementDir !== null) {
+            movementDirection = movementDir;
+        }
+        
+        lastLatLng = { lat, lng };
+        userPosition = { lat, lng };
+        
+        if (heading !== null && !isNaN(heading)) currentHeading = heading;
+        
+        if (userMarker) map.removeLayer(userMarker);
+        
+        // Определяем, какой угол показывать на стрелке пользователя:
+        // - Если есть движение и оно значительное (> 2м за 5 сек) → показываем направление движения
+        // - Иначе показываем направление телефона (компас)
+        let displayAngle = currentHeading;
+        let angleType = "компас";
+        
+        if (movementDirection !== null) {
+            // Есть движение - показываем реальное направление движения
+            displayAngle = movementDirection;
+            angleType = "движение";
+        }
+        
+        // Создаем иконку пользователя со стрелкой (зеленый круг + стрелка)
+        const userIcon = L.divIcon({
+            html: `<div style="position:relative;">
+                <div style="background:#22c55e;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 12px #22c55e;"></div>
+                <div style="position:absolute;top:-20px;left:2px;font-size:18px;transform:rotate(${displayAngle}deg);text-shadow:0 0 3px black;">⬆️</div>
+            </div>`,
+            iconSize: [30, 40], iconAnchor: [15, 20]
+        });
+        userMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map).bindPopup(`📍 ВЫ ЗДЕСЬ<br><small>${angleType === "движение" ? "🚶 Направление движения" : "🧭 Направление телефона"}</small>`);
+        
+        if (shouldCenterOnMe) {
+            map.setView([lat, lng], 18);
+            shouldCenterOnMe = false;
+        }
+        
+        performDailyResetIfNeeded();
+        if (monsters.length === 0) spawnFreshMonstersAroundUser(lat, lng);
+        if (chests.length === 0) spawnChestsAroundUser(lat, lng, 4);
+        
+        updateCompassAndUI();
+        saveGameData();
+    }
+    
+    // ========== КОМПАС, РАДАР, ЛОВЛЯ ==========
+    function getTargetMonster() {
+        if (!userPosition) return null;
+        if (selectedMonsterRoute && !selectedMonsterRoute.isCaught) {
+            const dist = getDistance(userPosition.lat, userPosition.lng, selectedMonsterRoute.lat, selectedMonsterRoute.lng);
+            return { monster: selectedMonsterRoute, distance: dist, isRouteTarget: true };
+        }
+        let nearest = null, minDist = Infinity;
+        monsters.forEach(m => {
+            if (m.isCaught) return;
+            const d = getDistance(userPosition.lat, userPosition.lng, m.lat, m.lng);
+            if (d < minDist) { minDist = d; nearest = m; }
+        });
+        return nearest ? { monster: nearest, distance: minDist, isRouteTarget: false } : null;
+    }
+
+    // Вычисляем угол от направления телефона к цели (относительно реального севера)
+    function getAngleToTargetRelativeToNorth(targetLat, targetLng) {
+        if (!userPosition) return 0;
+        
+        const deltaX = targetLng - userPosition.lng;
+        const deltaY = targetLat - userPosition.lat;
+        let targetBearing = Math.atan2(deltaX, deltaY) * 180 / Math.PI;
+        if (targetBearing < 0) targetBearing += 360;
+        
+        let angle = targetBearing - currentHeading;
+        if (angle < 0) angle += 360;
+        
+        return angle;
+    }
+    
+    function updateVibroCompass(angleToTarget) {
+        if (!vibroBarFill) return;
+        let intensity = Math.max(0, 100 - (Math.min(angleToTarget, 360 - angleToTarget) / 180) * 100);
+        vibroBarFill.style.width = intensity + '%';
+        
+        if (vibrationEnabled && angleToTarget < 30 && angleToTarget > 0 && !currentCatchMonster) {
+            const vibroDuration = Math.max(30, Math.floor(80 - (angleToTarget * 1.5)));
+            if (navigator.vibrate && (Date.now() - lastVibrationTime > 150)) {
+                navigator.vibrate(vibroDuration);
+                lastVibrationTime = Date.now();
+            }
+        }
+    }
+    
+    function drawRadar() {
+        if (!ctx || !userPosition) return;
+        const size = 100;
+        ctx.clearRect(0, 0, size, size);
+        ctx.strokeStyle = '#2ecc71';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, size/2 - 5, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, (size/2 - 5) * 0.66, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, (size/2 - 5) * 0.33, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(size/2, 5);
+        ctx.lineTo(size/2, size-5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(5, size/2);
+        ctx.lineTo(size-5, size/2);
+        ctx.stroke();
+        
+        const maxRadarDistance = 300;
+        const allMapObjects = [...monsters, ...chests];
+        allMapObjects.forEach(obj => {
+            const isMonster = obj.catchTime !== undefined;
+            if (isMonster && obj.isCaught) return;
+            const dist = getDistance(userPosition.lat, userPosition.lng, obj.lat, obj.lng);
+            if (dist > maxRadarDistance) return;
+            
+            const targetAngle = getAngleToTargetRelativeToNorth(obj.lat, obj.lng);
+            const radarDist = (dist / maxRadarDistance) * (size/2 - 8);
+            const radarX = size/2 + Math.sin(targetAngle * Math.PI / 180) * radarDist;
+            const radarY = size/2 - Math.cos(targetAngle * Math.PI / 180) * radarDist;
+            
+            let color = isMonster ? '#e94560' : '#f39c12';
+            if (isMonster && obj.rarity === 'rare') color = '#f39c12';
+            if (isMonster && obj.rarity === 'epic') color = '#9b59b6';
+            if (isMonster && obj.rarity === 'legendary') color = '#f1c40f';
+            if (isMonster && obj.isMegaBoss) color = '#ff00ff';
+            
+            ctx.beginPath();
+            ctx.arc(radarX, radarY, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+        });
+    }
+    
+    function updateCompassAndUI() {
+        if (!userPosition) return;
+        checkHourlySpawn();
+        checkMegaBossSpawn();
+        const target = getTargetMonster();
+        
+        if (target && target.monster) {
+            const arrowAngle = getAngleToTargetRelativeToNorth(target.monster.lat, target.monster.lng);
+            compassArrow.style.transform = `rotate(${arrowAngle}deg)`;
+            compassDistanceSpan.innerText = `${Math.round(target.distance)} м`;
+            compassMonsterSpan.innerText = `${target.monster.emoji} ${target.monster.name}`;
+            nearbyNameSpan.innerHTML = `${target.monster.emoji} ${target.monster.name}${target.isRouteTarget ? ' (маршрут)' : ''}`;
+            nearbyDistSpan.innerHTML = `${Math.round(target.distance)} м`;
+            if (nearestDistanceSpan) nearestDistanceSpan.innerText = `${Math.round(target.distance)} м`;
+            updateVibroCompass(arrowAngle);
+            
+            if (target.distance <= 20 && !target.monster.isCaught) {
+                if (!catchPanelDiv.classList.contains('active')) {
+                    catchPanelDiv.classList.add('active');
+                    showNotification(`⚠️ ${target.monster.name} в зоне поражения! Ловите!`);
+                    doVibration(150);
+                }
+                currentCatchMonster = target.monster;
+                currentCatchDistance = target.distance;
+                catchMonsterNameSpan.innerHTML = `${target.monster.emoji} ${target.monster.name}`;
+                catchDistanceSpan.innerHTML = `Расстояние: ${Math.round(target.distance)} м`;
+            } else if (catchPanelDiv.classList.contains('active') && (!currentCatchMonster || currentCatchMonster.isCaught || target.distance > 20)) {
+                catchPanelDiv.classList.remove('active');
+                if (catchInterval) clearInterval(catchInterval);
+                isCharging = false;
+                catchButton.classList.remove('charging');
+                holdCounterSpan.innerText = '0.0';
+                catchProgressBar.style.width = '0%';
+                currentCatchMonster = null;
+            }
+        } else {
+            compassArrow.style.transform = `rotate(0deg)`;
+            compassDistanceSpan.innerText = '— м';
+            compassMonsterSpan.innerText = '—';
+            nearbyNameSpan.innerHTML = '—';
+            nearbyDistSpan.innerHTML = '— м';
+            if (nearestDistanceSpan) nearestDistanceSpan.innerText = '— м';
+            if (vibroBarFill) vibroBarFill.style.width = '0%';
+        }
+        
+        if (selectedMonsterRoute && userPosition && !selectedMonsterRoute.isCaught && currentRouteLine) {
+            currentRouteLine.setLatLngs([L.latLng(userPosition.lat, userPosition.lng), L.latLng(selectedMonsterRoute.lat, selectedMonsterRoute.lng)]);
+        }
+        drawRadar();
+    }
+    
+    // ========== ЛОВЛЯ МОНСТРА ==========
+    function catchMonsterLogic() {
+        if (!currentCatchMonster || currentCatchMonster.isCaught) return;
+        const monster = currentCatchMonster;
+        monster.isCaught = true;
+        caughtCount++;
+        totalCaught++;
+        addCoins(monster.reward);
+        addExp(monster.reward);
+        
+        if (monster.isMegaBoss) {
+            megaBossDefeated = true;
+            showNotification(`🏆 ВЕЛИКАЯ ПОБЕДА! МЕГА-БОСС ПОВЕРЖЕН! +${monster.reward} монет! 🏆`);
+            addCoins(100);
+        }
+        
+        if (!bestiary[monster.name]) {
+            bestiary[monster.name] = true;
+            renderBestiary();
+        }
+        
+        const now = Date.now();
+        if (now - lastCatchTime < 300000) {
+            comboCounter++;
+            if (comboCounter >= 3) addCoins(monster.reward * (comboCounter - 1));
+        } else comboCounter = 1;
+        lastCatchTime = now;
+        
+        clearRoute();
+        updateMonstersMap();
+        updateUI();
+        saveGameData();
+        showNotification(`🎉 ПОЙМАН! ${monster.emoji} ${monster.name}! +${monster.reward} монет!`);
+        doVibration(300);
+        catchPanelDiv.classList.remove('active');
+        currentCatchMonster = null;
+    }
+    
+    function startCatch() {
+        if (!currentCatchMonster || currentCatchMonster.isCaught) return;
+        if (currentCatchDistance > 20) { showNotification('❌ Слишком далеко!', true); return; }
+        if (isCharging) return;
+        isCharging = true;
+        chargeStartTime = Date.now();
+        catchButton.classList.add('charging');
+        catchButton.innerHTML = '⚡ ЛОВЛЯ... НЕ ОТПУСКАЙТЕ ⚡';
+        catchInterval = setInterval(() => {
+            if (!isCharging) return;
+            const elapsed = Date.now() - chargeStartTime;
+            catchProgressBar.style.width = Math.min(100, (elapsed / currentCatchMonster.catchTime) * 100) + '%';
+            holdCounterSpan.innerText = (elapsed / 1000).toFixed(1);
+            if (elapsed >= currentCatchMonster.catchTime) {
+                clearInterval(catchInterval);
+                catchInterval = null;
+                isCharging = false;
+                catchButton.classList.remove('charging');
+                catchButton.innerHTML = '👆 УДЕРЖИВАЙТЕ ДЛЯ ЛОВЛИ';
+                holdCounterSpan.innerText = '0.0';
+                catchProgressBar.style.width = '0%';
+                catchMonsterLogic();
+            }
+        }, 50);
+    }
+    
+    function stopCatch() {
+        if (!isCharging) return;
+        clearInterval(catchInterval);
+        catchInterval = null;
+        isCharging = false;
+        catchButton.classList.remove('charging');
+        catchButton.innerHTML = '👆 УДЕРЖИВАЙТЕ ДЛЯ ЛОВЛИ';
+        holdCounterSpan.innerText = '0.0';
+        catchProgressBar.style.width = '0%';
+        showNotification('❌ Ловля прервана!', true);
+        doVibration(80);
+    }
+    
+    // ========== UI РЕНДЕРИНГ ==========
+    function renderBestiary() {
+        const container = document.getElementById('bestiaryGrid');
+        if (!container) return;
+        const allTypes = [...MONSTER_TYPES, MEGA_BOSS];
+        container.innerHTML = `<div class="bestiary-grid">${allTypes.map(m => `
+            <div class="bestiary-card ${bestiary[m.name] ? 'caught' : ''}">
+                <div class="bestiary-emoji">${m.emoji}</div>
+                <div class="bestiary-name">${m.name}</div>
+                <div class="bestiary-rarity">${m.rarity} ⭐ ${m.reward}</div>
+            </div>
+        `).join('')}</div>`;
+    }
+    
+    function renderAchievements() {
+        const achList = [
+            { name: "Первый улов", desc: "Поймать первого монстра", icon: "🎣", done: totalCaught >= 1 },
+            { name: "Начинающий охотник", desc: "Поймать 5 монстров", icon: "🔰", done: totalCaught >= 5 },
+            { name: "Мастер охоты", desc: "Поймать 25 монстров", icon: "⚜️", done: totalCaught >= 25 },
+            { name: "Марафонец", desc: "Пройти 5 км", icon: "👟", done: totalDistance >= 5000 },
+            { name: "Победитель босса", desc: "Победить Мега-Босса", icon: "👾", done: megaBossDefeated }
+        ];
+        const container = document.getElementById('achievementsList');
+        if (!container) return;
+        container.innerHTML = achList.map(a => `
+            <div class="achievement-item">
+                <div class="achievement-icon">${a.icon}</div>
+                <div class="achievement-info">
+                    <div class="achievement-title">${a.name}</div>
+                    <div class="achievement-desc">${a.desc}</div>
+                </div>
+                <div class="achievement-status">${a.done ? '✅' : '🔒'}</div>
+            </div>
+        `).join('');
+    }
+    
+    function renderDailyTasks() {
+        const container = document.getElementById('dailyTasksList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="daily-task">
+                <div><div class="daily-task-name">🐙 Поймать 3 монстров</div><div class="daily-task-progress">${caughtCount}/3</div></div>
+                <div class="daily-reward">💰 30</div>
+            </div>
+            <div class="daily-task">
+                <div><div class="daily-task-name">👟 Пройти 500 метров</div><div class="daily-task-progress">${Math.floor(totalDistance)}/500</div></div>
+                <div class="daily-reward">💰 25</div>
+            </div>
+            <div class="daily-task">
+                <div><div class="daily-task-name">💰 Открыть 2 сундука</div><div class="daily-task-progress">${Math.floor(Math.random() * 3)}/2</div></div>
+                <div class="daily-reward">💰 40</div>
+            </div>
+        `;
+    }
+    
+    function renderShop() {
+        const container = document.getElementById('shopList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="shop-item">
+                <div class="shop-coins"><i class="fas fa-coins"></i> ${coins} монет</div>
+                <button class="shop-btn" id="radarShopBtn">🔍 РАДАР (50)</button>
+                <button class="shop-btn" id="baitBtn">🍖 ПРИМАНКА (30)</button>
+                <button class="shop-btn" id="chestFinderBtn" style="background:#ff9800;">📦 ПОИСК СУНДУКОВ (20)</button>
+                <button class="shop-btn" id="forceResetBtn" style="background:#f39c12;">🌙 ПРИНУДИТЕЛЬНЫЙ РЕСЕТ</button>
+                <button class="shop-btn" id="geoRetryBtn" style="background:#22c55e;">📍 ОБНОВИТЬ ПОЗИЦИЮ</button>
+            </div>
+        `;
+        
+        document.getElementById('radarShopBtn')?.addEventListener('click', () => {
+            if (coins >= 50) {
+                coins -= 50; updateUI(); saveGameData(); renderShop();
+                showNotification('🔍 РАДАР активирован!');
+                monsterMarkers.forEach(m => m.setOpacity(1));
+                chestMarkers.forEach(m => m.setOpacity(1));
+                setTimeout(() => {
+                    monsterMarkers.forEach(m => m.setOpacity(0.7));
+                    chestMarkers.forEach(m => m.setOpacity(0.7));
+                }, 10000);
+            } else showNotification('❌ Не хватает монет!', true);
+        });
+        
+        document.getElementById('baitBtn')?.addEventListener('click', () => {
+            if (coins >= 30 && userPosition) {
+                coins -= 30; updateUI(); saveGameData(); renderShop();
+                const type = MONSTER_TYPES[Math.floor(Math.random() * MONSTER_TYPES.length)];
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 80;
+                const deltaLat = (radius * Math.cos(angle)) / 111300;
+                const deltaLng = (radius * Math.sin(angle)) / (111300 * Math.cos(userPosition.lat * Math.PI / 180));
+                monsters.push({
+                    id: Date.now() + Math.random(),
+                    lat: userPosition.lat + deltaLat, lng: userPosition.lng + deltaLng,
+                    type: type, name: type.name, emoji: type.emoji, color: type.color,
+                    catchTime: type.catchTime, rarity: type.rarity, reward: type.reward, isCaught: false
+                });
+                updateMonstersMap();
+                saveGameData();
+                showNotification(`🍖 Приманка привлекла ${type.emoji} ${type.name}!`);
+            } else showNotification('❌ Не хватает монет или нет позиции!', true);
+        });
+        
+        document.getElementById('chestFinderBtn')?.addEventListener('click', () => {
+            if (coins >= 20 && userPosition && chests.length > 0) {
+                coins -= 20; updateUI(); saveGameData(); renderShop();
+                const nearestChest = chests.reduce((prev, curr) => {
+                    const dPrev = getDistance(userPosition.lat, userPosition.lng, prev.lat, prev.lng);
+                    const dCurr = getDistance(userPosition.lat, userPosition.lng, curr.lat, curr.lng);
+                    return dPrev < dCurr ? prev : curr;
+                });
+                if (currentRouteLine) map.removeLayer(currentRouteLine);
+                currentRouteLine = L.polyline([
+                    L.latLng(userPosition.lat, userPosition.lng),
+                    L.latLng(nearestChest.lat, nearestChest.lng)
+                ], { color: '#ff9800', weight: 5, dashArray: '10, 8' }).addTo(map);
+                showNotification(`📦 Построен маршрут к ближайшему сундуку!`);
+            } else showNotification('❌ Не хватает монет или нет сундуков!', true);
+        });
+        
+        document.getElementById('forceResetBtn')?.addEventListener('click', () => {
+            if (userPosition) {
+                monsters = [];
+                chests = [];
+                megaBossDefeated = false;
+                spawnFreshMonstersAroundUser(userPosition.lat, userPosition.lng);
+                spawnChestsAroundUser(userPosition.lat, userPosition.lng, 4);
+                localStorage.setItem('monster_last_reset_date', new Date().toDateString());
+                showNotification("🌙 Принудительное обновление!", false);
+                saveGameData();
+            }
+        });
+        
+        document.getElementById('geoRetryBtn')?.addEventListener('click', () => forceRefreshLocation());
+    }
+    
+    function centerOnUser() {
+        if (userPosition) map.setView([userPosition.lat, userPosition.lng], map.getZoom());
+    }
+    
+    function toggleRotationLock() {
+        rotationLocked = !rotationLocked;
+        const btn = document.getElementById('toggleRotateBtn');
+        if (rotationLocked) {
+            btn.innerHTML = '🔓 РАЗБЛОКИРОВАТЬ';
+            btn.classList.add('active');
+            if (map && map.touchRotate) map.touchRotate.disable();
+        } else {
+            btn.innerHTML = '🔒 БЛОКИРОВКА ПОВОРОТА';
+            btn.classList.remove('active');
+            if (map && map.touchRotate) map.touchRotate.enable();
+        }
+    }
+    
+    function toggleVibration() {
+        vibrationEnabled = !vibrationEnabled;
+        vibroStatus.innerText = vibrationEnabled ? 'ВКЛ' : 'ВЫКЛ';
+        vibroStatus.style.color = vibrationEnabled ? '#2ecc71' : '#e94560';
+        showNotification(vibrationEnabled ? '📳 Вибрация включена' : '🔕 Вибрация выключена');
+    }
+    
+    // ========== ИНИЦИАЛИЗАЦИЯ ==========
+    function initMap() {
+        map = L.map('map', { rotate: true, touchRotate: true }).setView([55.751244, 37.618423], 18);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+        if (map.touchRotate) map.touchRotate.enable();
+        
+        if (radarCanvas) {
+            radarCanvas.width = 100;
+            radarCanvas.height = 100;
+            ctx = radarCanvas.getContext('2d');
+        }
+        
+        loadGameData();
+        performDailyResetIfNeeded();
+        
+        const savedPos = loadLastPosition();
+        if (savedPos) updateUserPosition(savedPos.lat, savedPos.lng);
+        requestGeolocationOnce();
+        
+        document.getElementById('myLocationBtn').addEventListener('click', () => centerOnUser());
+        document.getElementById('menuBtn').addEventListener('click', () => document.getElementById('sidebar').classList.add('open'));
+        document.getElementById('closeSidebar').addEventListener('click', () => document.getElementById('sidebar').classList.remove('open'));
+        document.getElementById('toggleRotateBtn').addEventListener('click', toggleRotationLock);
+        document.getElementById('compassBtn').addEventListener('click', () => {
+            if (map.setBearing && !rotationLocked) map.setBearing(0);
+            showNotification('🧭 Компас сброшен на север');
+        });
+        document.getElementById('vibroToggle').addEventListener('click', toggleVibration);
+        
+        catchButton.addEventListener('mousedown', startCatch);
+        catchButton.addEventListener('mouseup', stopCatch);
+        catchButton.addEventListener('mouseleave', stopCatch);
+        catchButton.addEventListener('touchstart', (e) => { e.preventDefault(); startCatch(); });
+        catchButton.addEventListener('touchend', (e) => { e.preventDefault(); stopCatch(); });
+        
+        document.querySelectorAll('.sidebar-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`${tab.dataset.tab}Tab`).classList.add('active');
+            });
+        });
+        
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                let heading = null;
+                if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading;
+                else if (e.alpha !== null) heading = 360 - e.alpha;
+                if (heading !== null && userPosition) {
+                    currentHeading = heading;
+                    // Обновляем иконку пользователя (если нет движения - показываем компас)
+                    if (movementDirection === null && userMarker) {
+                        const userIcon = L.divIcon({
+                            html: `<div style="position:relative;">
+                                <div style="background:#22c55e;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 12px #22c55e;"></div>
+                                <div style="position:absolute;top:-20px;left:2px;font-size:18px;transform:rotate(${currentHeading}deg);text-shadow:0 0 3px black;">⬆️</div>
+                            </div>`,
+                            iconSize: [30, 40], iconAnchor: [15, 20]
+                        });
+                        userMarker.setIcon(userIcon);
+                    }
+                    updateCompassAndUI();
+                }
+            });
+        }
+        
+        setInterval(() => updateCompassAndUI(), 500);
+        setInterval(() => drawRadar(), 500);
+    }
+    
+    initMap();
+</script>
+</body>
+</html>
